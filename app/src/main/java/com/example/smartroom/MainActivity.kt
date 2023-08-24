@@ -14,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +38,7 @@ import java.util.*
 class MainActivity : ComponentActivity() {
 
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private lateinit var socket: BluetoothSocket
 
     @RequiresApi(Build.VERSION_CODES.S)
     private val requiredPermissions = arrayOf(
@@ -99,7 +101,7 @@ class MainActivity : ComponentActivity() {
     fun BluetoothConnectScreen() {
         var deviceName by remember { mutableStateOf(TextFieldValue()) }
         var connecting by remember { mutableStateOf(false) }
-        var errorText by remember { mutableStateOf("") }
+        var txt by remember { mutableStateOf("") }
 
         var btMessage by remember { mutableStateOf("") }
         var graph = Graph(10)
@@ -132,54 +134,55 @@ class MainActivity : ComponentActivity() {
 
                     if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
                         Log.e("CONNECTION", "Bluetooth is not available or turned off")
-                        errorText = "Bluetooth is not available or turned off."
+                        txt = "Bluetooth is not available or turned off."
                     } else {
                         Log.d("CONNECTION", "Connecting...")
                         connecting = true
                         connectToDevice(
                             deviceName.text,
-                            onError = { errorMessage -> errorText = errorMessage },
-                            onMessageReceived = { message ->
-                                Log.d("MESSAGE", message)
-                                Log.d("MESSAGE", "Before: $btMessage")
+                            onError = {  }
+                        )
+                        beginListeningForMessages { message ->
+                            Log.d("MESSAGE", message)
+                            Log.d("MESSAGE", "Before: $btMessage")
 
-                                // Aggiungi il messaggio ricevuto al buffer
-                                btMessage += message
+                            // Aggiungi il messaggio ricevuto al buffer
+                            btMessage += message
 
-                                // Cerca l'indice dell'inizio del primo messaggio nel buffer
-                                var startIndex = btMessage.indexOf('|')
+                            // Cerca l'indice dell'inizio del primo messaggio nel buffer
+                            var startIndex = btMessage.indexOf('|')
 
-                                // Continua a cercare messaggi finché ce ne sono
-                                while (startIndex != -1) {
-                                    // Cerca l'indice della fine del primo messaggio nel buffer
-                                    val endIndex = btMessage.indexOf('&', startIndex)
+                            // Continua a cercare messaggi finché ce ne sono
+                            while (startIndex != -1) {
+                                // Cerca l'indice della fine del primo messaggio nel buffer
+                                val endIndex = btMessage.indexOf('&', startIndex)
 
-                                    if (endIndex != -1) {
-                                        // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
-                                        val json = btMessage.substring(startIndex + 1, endIndex)
+                                if (endIndex != -1) {
+                                    // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
+                                    val json = btMessage.substring(startIndex + 1, endIndex)
 
-                                        try {
-                                            val map = JSONObject(json)
-                                            Log.d("JSONNNN", map["pir"].toString())
-                                            Log.d("JSONNNN", map["light"].toString())
-                                        } catch (e: IOException) {
-                                            Log.e("MESSAGE", "Error parsing JSON: $json")
-                                        }
-
-                                        // Rimuovi il messaggio dal buffer
-                                        btMessage = btMessage.substring(endIndex + 1)
-                                    } else {
-                                        // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
-                                        break
+                                    try {
+                                        val map = JSONObject(json)
+                                        Log.d("JSONNNN", map["pir"].toString())
+                                        Log.d("JSONNNN", map["light"].toString())
+                                        txt = "" + map["pir"] + ", " + map["light"]
+                                    } catch (e: IOException) {
+                                        Log.e("MESSAGE", "Error parsing JSON: $json")
                                     }
 
-                                    // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
-                                    startIndex = btMessage.indexOf('|')
+                                    // Rimuovi il messaggio dal buffer
+                                    btMessage = btMessage.substring(endIndex + 1)
+                                } else {
+                                    // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
+                                    break
                                 }
 
-                                Log.d("MESSAGE", "After: $btMessage")
+                                // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
+                                startIndex = btMessage.indexOf('|')
                             }
-                        )
+
+                            Log.d("MESSAGE", "After: $btMessage")
+                        }
                     }
                 },
                 enabled = !connecting
@@ -187,10 +190,24 @@ class MainActivity : ComponentActivity() {
                 Text(text = "Connect")
             }
 
+            Button(
+                onClick = {
+                    sendMessage("Ciaone")
+                },
+                enabled = connecting
+            ) {
+                Text("Send message")
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Error:")
-            Text(text = errorText, color = MaterialTheme.colorScheme.error)
+            LazyColumn(
+                modifier = Modifier.fillMaxHeight(0.3f).fillMaxWidth()
+            ) {
+                item {
+                    Text(text = txt, color = MaterialTheme.colorScheme.error)
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -199,22 +216,15 @@ class MainActivity : ComponentActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.S)
-    private fun connectToDevice(deviceName: String, onError: (String) -> Unit, onMessageReceived: (String) -> Unit) {
+    private fun connectToDevice(deviceName: String, onError: (String) -> Unit): Boolean {
         Log.d("CONNECTION", "Trying to connect to $deviceName")
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             Log.e("CONNECTION", "Error: no permissions")
-            return
+            return false
         }
 
         val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter?.bondedDevices
@@ -222,11 +232,10 @@ class MainActivity : ComponentActivity() {
 
         if (targetDevice == null) {
             onError("Device not found or not paired.")
-            return
+            return false
         }
 
         val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Standard SPP UUID
-        val socket: BluetoothSocket
 
         try {
             socket = targetDevice.createRfcommSocketToServiceRecord(uuid)
@@ -235,30 +244,40 @@ class MainActivity : ComponentActivity() {
             // Connection successful, handle further communication
             Log.d("CONNECTION", "Connected to $deviceName")
 
-            // Stampa sul log ogni messaggio ricevuto dal seriale del dispositivo
-            val inputStream = socket.inputStream
-            val buffer = ByteArray(1024)
-
-            val serReadThread = Thread {
-                this.isThreadReading = true
-                while (isThreadReading) {
-                    try {
-                        val bytes = inputStream.read(buffer)
-                        val readMessage = String(buffer, 0, bytes)
-                        //Log.d("MESSAGE", "Received: $readMessage")
-                        onMessageReceived(readMessage)
-                    } catch (e: IOException) {
-                        onError("Error reading from Bluetooth socket.")
-                        break
-                    }
-                }
-                inputStream.close()
-            }
-
-            serReadThread.start()
-
         } catch (e: IOException) {
             onError("Error establishing Bluetooth connection.")
+            return false
+        }
+        return true
+    }
+
+    private fun beginListeningForMessages(onMessageReceived: (String) -> Unit) {
+        val inputStream = socket.inputStream
+        val buffer = ByteArray(1024)
+
+        val serReadThread = Thread {
+            this.isThreadReading = true
+            while (isThreadReading) {
+                try {
+                    val bytes = inputStream.read(buffer)
+                    val readMessage = String(buffer, 0, bytes)
+                    Log.d("MESSAGE-RCV", readMessage)
+                    onMessageReceived(readMessage)
+                } catch (e: IOException) {
+                    break
+                }
+            }
+            inputStream.close()
+        }
+        serReadThread.start()
+    }
+
+    private fun sendMessage(message: String) {
+        if (socket.isConnected) {
+            val outputStream = socket.outputStream
+            outputStream.write("Ciaone".toByteArray())
+            outputStream.flush()
+            Log.d("MESSAGE-SND", message)
         }
     }
 }
