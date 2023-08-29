@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
     fun BluetoothConnectScreen() {
-        var deviceName by remember { mutableStateOf(TextFieldValue()) }
+        var outMessage by remember { mutableStateOf("") }
         var connecting by remember { mutableStateOf(false) }
         var txt by remember { mutableStateOf("") }
 
@@ -109,109 +109,127 @@ class MainActivity : ComponentActivity() {
 
         val context = LocalContext.current
 
+        val buttonClick = { deviceName: String ->
+            if (!arePermissionsGranted(requiredPermissions)) {
+                Log.d("CONNECTION", "Requesting permissions")
+                requestPermissions()
+                Log.d("CONNECTION", "Requested")
+            } else {
+
+                if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+                    Log.e("CONNECTION", "Bluetooth is not available or turned off")
+                    txt = "Bluetooth is not available or turned off."
+                } else {
+                    Log.d("CONNECTION", "Connecting...")
+                    connecting = true
+                    connectToDevice(
+                        deviceName,
+                        onError = { }
+                    )
+                    beginListeningForMessages { message ->
+                        Log.d("MESSAGE", message)
+                        Log.d("MESSAGE", "Before: $btMessage")
+
+                        // Aggiungi il messaggio ricevuto al buffer
+                        btMessage += message
+
+                        // Cerca l'indice dell'inizio del primo messaggio nel buffer
+                        var startIndex = btMessage.indexOf('|')
+
+                        // Continua a cercare messaggi finché ce ne sono
+                        while (startIndex != -1) {
+                            // Cerca l'indice della fine del primo messaggio nel buffer
+                            val endIndex = btMessage.indexOf('&', startIndex)
+
+                            if (endIndex != -1) {
+                                // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
+                                val json = btMessage.substring(startIndex + 1, endIndex)
+
+                                try {
+                                    val map = JSONObject(json)
+                                    Log.d("JSON", map["pir"].toString())
+                                    Log.d("JSON", map["light"].toString())
+                                    txt = "" + map["pir"] + ", " + map["light"]
+                                } catch (e: IOException) {
+                                    Log.e("MESSAGE", "Error parsing JSON: $json")
+                                }
+
+                                // Rimuovi il messaggio dal buffer
+                                btMessage = btMessage.substring(endIndex + 1)
+                            } else {
+                                // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
+                                break
+                            }
+
+                            // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
+                            startIndex = btMessage.indexOf('|')
+                        }
+
+                        Log.d("MESSAGE", "After: $btMessage")
+                    }
+                }
+            }
+        }
+
         Column(
             modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.SpaceAround,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             TextField(
-                value = deviceName.text,
-                onValueChange = { deviceName = TextFieldValue(it) },
-                placeholder = { Text("Enter Device Name") },
-                modifier = Modifier.padding(16.dp)
+                value = outMessage,
+                onValueChange = { outMessage = it },
+                enabled = connecting
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = {
-                    if (!arePermissionsGranted(requiredPermissions)) {
-                        Log.d("CONNECTION", "Requesting permissions")
-                        requestPermissions()
-                        Log.d("CONNECTION", "Requested")
-                        return@Button
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    Button(
+                        onClick = {
+                            buttonClick("DSD TECH HC-05")
+                        },
+                        enabled = !connecting
+                    ) {
+                        Text(text = "Connect to DSD TECH HC-05")
                     }
 
-                    if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-                        Log.e("CONNECTION", "Bluetooth is not available or turned off")
-                        txt = "Bluetooth is not available or turned off."
-                    } else {
-                        Log.d("CONNECTION", "Connecting...")
-                        connecting = true
-                        connectToDevice(
-                            deviceName.text,
-                            onError = {  }
-                        )
-                        beginListeningForMessages { message ->
-                            Log.d("MESSAGE", message)
-                            Log.d("MESSAGE", "Before: $btMessage")
-
-                            // Aggiungi il messaggio ricevuto al buffer
-                            btMessage += message
-
-                            // Cerca l'indice dell'inizio del primo messaggio nel buffer
-                            var startIndex = btMessage.indexOf('|')
-
-                            // Continua a cercare messaggi finché ce ne sono
-                            while (startIndex != -1) {
-                                // Cerca l'indice della fine del primo messaggio nel buffer
-                                val endIndex = btMessage.indexOf('&', startIndex)
-
-                                if (endIndex != -1) {
-                                    // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
-                                    val json = btMessage.substring(startIndex + 1, endIndex)
-
-                                    try {
-                                        val map = JSONObject(json)
-                                        Log.d("JSONNNN", map["pir"].toString())
-                                        Log.d("JSONNNN", map["light"].toString())
-                                        txt = "" + map["pir"] + ", " + map["light"]
-                                    } catch (e: IOException) {
-                                        Log.e("MESSAGE", "Error parsing JSON: $json")
-                                    }
-
-                                    // Rimuovi il messaggio dal buffer
-                                    btMessage = btMessage.substring(endIndex + 1)
-                                } else {
-                                    // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
-                                    break
-                                }
-
-                                // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
-                                startIndex = btMessage.indexOf('|')
-                            }
-
-                            Log.d("MESSAGE", "After: $btMessage")
-                        }
+                    Button(
+                        onClick = {
+                            buttonClick("HC-06")
+                        },
+                        enabled = !connecting
+                    ) {
+                        Text(text = "Connect to HC-06")
                     }
-                },
-                enabled = !connecting
-            ) {
-                Text(text = "Connect")
-            }
-
-            Button(
-                onClick = {
-                    sendMessage("Ciaone")
-                },
-                enabled = connecting
-            ) {
-                Text("Send message")
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            LazyColumn(
-                modifier = Modifier.fillMaxHeight(0.3f).fillMaxWidth()
-            ) {
-                item {
-                    Text(text = txt, color = MaterialTheme.colorScheme.error)
                 }
+
+                Button(
+                    onClick = {
+                        sendMessage(outMessage)
+                    },
+                    enabled = connecting
+                ) {
+                    Text("Send message")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(modifier = Modifier.padding(horizontal = 5.dp, vertical = 0.dp), text = txt, color = MaterialTheme.colorScheme.error)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                ComposableGraph(values = graphState.value)
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            ComposableGraph(values = graphState.value)
         }
     }
 
@@ -275,7 +293,7 @@ class MainActivity : ComponentActivity() {
     private fun sendMessage(message: String) {
         if (socket.isConnected) {
             val outputStream = socket.outputStream
-            outputStream.write("Ciaone".toByteArray())
+            outputStream.write(message.toByteArray())
             outputStream.flush()
             Log.d("MESSAGE-SND", message)
         }
