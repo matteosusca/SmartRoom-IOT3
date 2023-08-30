@@ -13,19 +13,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -58,7 +60,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            BluetoothConnectScreen()
+            Surface(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                BluetoothConnectScreen()
+            }
         }
 
         // Check and request permissions
@@ -104,8 +110,7 @@ class MainActivity : ComponentActivity() {
         var txt by remember { mutableStateOf("") }
 
         var btMessage by remember { mutableStateOf("") }
-        var graph = Graph(10)
-        val graphState = rememberUpdatedState(graph)
+        var light by remember { mutableStateOf(0.0) }
 
         val context = LocalContext.current
 
@@ -127,8 +132,7 @@ class MainActivity : ComponentActivity() {
                         onError = { }
                     )
                     beginListeningForMessages { message ->
-                        Log.d("MESSAGE", message)
-                        Log.d("MESSAGE", "Before: $btMessage")
+                        //Log.d("MESSAGE", message)
 
                         // Aggiungi il messaggio ricevuto al buffer
                         btMessage += message
@@ -147,9 +151,8 @@ class MainActivity : ComponentActivity() {
 
                                 try {
                                     val map = JSONObject(json)
-                                    Log.d("JSON", map["pir"].toString())
-                                    Log.d("JSON", map["light"].toString())
                                     txt = "" + map["pir"] + ", " + map["light"]
+                                    light = map["light"].toString().trim().toDouble() / 1024
                                 } catch (e: IOException) {
                                     Log.e("MESSAGE", "Error parsing JSON: $json")
                                 }
@@ -164,8 +167,6 @@ class MainActivity : ComponentActivity() {
                             // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
                             startIndex = btMessage.indexOf('|')
                         }
-
-                        Log.d("MESSAGE", "After: $btMessage")
                     }
                 }
             }
@@ -173,7 +174,7 @@ class MainActivity : ComponentActivity() {
 
         Column(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceAround,
+            verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             TextField(
@@ -184,51 +185,63 @@ class MainActivity : ComponentActivity() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceAround
+                Button(
+                    onClick = {
+                        buttonClick("DSD TECH HC-05")
+                    },
+                    enabled = !connecting
                 ) {
-                    Button(
-                        onClick = {
-                            buttonClick("DSD TECH HC-05")
-                        },
-                        enabled = !connecting
-                    ) {
-                        Text(text = "Connect to DSD TECH HC-05")
-                    }
-
-                    Button(
-                        onClick = {
-                            buttonClick("HC-06")
-                        },
-                        enabled = !connecting
-                    ) {
-                        Text(text = "Connect to HC-06")
-                    }
+                    Text(text = "Connect to DSD TECH HC-05")
                 }
 
                 Button(
                     onClick = {
-                        sendMessage(outMessage)
+                        buttonClick("HC-06")
                     },
-                    enabled = connecting
+                    enabled = !connecting
                 ) {
-                    Text("Send message")
+                    Text(text = "Connect to HC-06")
                 }
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    sendMessage(outMessage)
+                },
+                enabled = connecting
+            ) {
+                Text("Send message")
+            }
 
-                Text(modifier = Modifier.padding(horizontal = 5.dp, vertical = 0.dp), text = txt, color = MaterialTheme.colorScheme.error)
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Text(modifier = Modifier.padding(horizontal = 5.dp, vertical = 0.dp), text = txt, color = MaterialTheme.colorScheme.error)
 
-                ComposableGraph(values = graphState.value)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Log.d("LIGHT", light.toString())
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.4f)
+                    .padding(10.dp)
+                    .border(2.dp, Color.Black),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(
+                    modifier = Modifier
+                        .border(2.dp, Color.Red)
+                        .fillMaxHeight(light.toFloat())
+                        .fillMaxWidth()
+                ) {
+
+                }
             }
         }
     }
@@ -279,7 +292,7 @@ class MainActivity : ComponentActivity() {
                 try {
                     val bytes = inputStream.read(buffer)
                     val readMessage = String(buffer, 0, bytes)
-                    Log.d("MESSAGE-RCV", readMessage)
+                    //Log.d("MESSAGE-RCV", readMessage)
                     onMessageReceived(readMessage)
                 } catch (e: IOException) {
                     break
