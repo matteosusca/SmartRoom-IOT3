@@ -33,6 +33,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.smartroom.utils.ComposableGraph
 import com.example.smartroom.utils.Graph
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.util.*
@@ -110,7 +111,7 @@ class MainActivity : ComponentActivity() {
         var txt by remember { mutableStateOf("") }
 
         var btMessage by remember { mutableStateOf("") }
-        var light by remember { mutableStateOf(0.0) }
+        var brightness by remember { mutableStateOf(0.0) }
 
         val context = LocalContext.current
 
@@ -151,9 +152,10 @@ class MainActivity : ComponentActivity() {
 
                                 try {
                                     val map = JSONObject(json)
-                                    txt = "" + map["pir"] + ", " + map["light"]
-                                    light = map["light"].toString().trim().toDouble() / 1024
-                                } catch (e: IOException) {
+
+                                    txt = "" + map["pir"] + ", " + map["brightness"]
+                                    brightness = map["brightness"].toString().trim().toDouble() / 1024
+                                } catch (e: JSONException) {
                                     Log.e("MESSAGE", "Error parsing JSON: $json")
                                 }
 
@@ -209,13 +211,68 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            Button(
-                onClick = {
-                    sendMessage(outMessage)
-                },
-                enabled = connecting
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
             ) {
-                Text("Send message")
+                Button(
+                    onClick = {
+                        sendMessage(outMessage)
+                    },
+                    enabled = connecting
+                ) {
+                    Text("Send custom message")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Button(
+                    onClick = {
+                        sendMessage("|{\"lights\":\"on\"}&")
+                    },
+                    enabled = connecting
+                ) {
+                    Text("Lights ON")
+                }
+
+                Button(
+                    onClick = {
+                        sendMessage("|{\"lights\":\"off\"}&")
+                    },
+                    enabled = connecting
+                ) {
+                    Text("Lights OFF")
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Button(
+                    onClick = {
+                        sendMessage("|{\"blinds\":\"up\"}&")
+                    },
+                    enabled = connecting
+                ) {
+                    Text("Blinds UP")
+                }
+
+                Button(
+                    onClick = {
+                        sendMessage("|{\"blinds\":\"down\"}&")
+                    },
+                    enabled = connecting
+                ) {
+                    Text("Blinds DOWN")
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -224,7 +281,7 @@ class MainActivity : ComponentActivity() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Log.d("LIGHT", light.toString())
+            Log.d("BRIGHTNESS", brightness.toString())
 
             Row(
                 modifier = Modifier
@@ -237,7 +294,7 @@ class MainActivity : ComponentActivity() {
                 Column(
                     modifier = Modifier
                         .border(2.dp, Color.Red)
-                        .fillMaxHeight(light.toFloat())
+                        .fillMaxHeight(brightness.toFloat())
                         .fillMaxWidth()
                 ) {
 
@@ -307,7 +364,6 @@ class MainActivity : ComponentActivity() {
         if (socket.isConnected) {
             val outputStream = socket.outputStream
             outputStream.write(message.toByteArray())
-            outputStream.flush()
             Log.d("MESSAGE-SND", message)
         }
     }
