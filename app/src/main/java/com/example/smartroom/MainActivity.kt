@@ -20,6 +20,7 @@ import androidx.compose.material.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -112,6 +113,7 @@ class MainActivity : ComponentActivity() {
 
         var btMessage by remember { mutableStateOf("") }
         var brightness by remember { mutableStateOf(0.0) }
+        var blindsLevel by remember { mutableStateOf(0.0) }
 
         val context = LocalContext.current
 
@@ -153,7 +155,7 @@ class MainActivity : ComponentActivity() {
                                 try {
                                     val map = JSONObject(json)
 
-                                    txt = "" + map["pir"] + ", " + map["brightness"]
+                                    txt = map.toString()
                                     brightness = map["brightness"].toString().trim().toDouble() / 1024
                                 } catch (e: JSONException) {
                                     Log.e("MESSAGE", "Error parsing JSON: $json")
@@ -251,6 +253,12 @@ class MainActivity : ComponentActivity() {
                     Text("Lights OFF")
                 }
             }
+
+            Slider(
+                value = blindsLevel.toFloat(),
+                onValueChange = { blindsLevel = it.toDouble() }
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -258,20 +266,11 @@ class MainActivity : ComponentActivity() {
             ) {
                 Button(
                     onClick = {
-                        sendMessage("|{\"blinds\":\"up\"}&")
+                        sendMessage("|{\"blinds\":\"" + (blindsLevel * 100).toInt().toString() + "\"}&")
                     },
                     enabled = connecting
                 ) {
-                    Text("Blinds UP")
-                }
-
-                Button(
-                    onClick = {
-                        sendMessage("|{\"blinds\":\"down\"}&")
-                    },
-                    enabled = connecting
-                ) {
-                    Text("Blinds DOWN")
+                    Text("Move blinds")
                 }
             }
 
