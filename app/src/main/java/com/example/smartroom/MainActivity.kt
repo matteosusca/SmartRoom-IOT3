@@ -16,6 +16,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,13 +28,15 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.smartroom.utils.ComposableGraph
-import com.example.smartroom.utils.Graph
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
@@ -103,19 +106,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    @OptIn(ExperimentalMaterial3Api::class)
     @RequiresApi(Build.VERSION_CODES.S)
     @Composable
     fun BluetoothConnectScreen() {
         var outMessage by remember { mutableStateOf("") }
+        var connected by remember { mutableStateOf(false) }
         var connecting by remember { mutableStateOf(false) }
         var txt by remember { mutableStateOf("") }
 
         var btMessage by remember { mutableStateOf("") }
         var brightness by remember { mutableStateOf(0.0) }
         var blindsLevel by remember { mutableStateOf(0.0) }
-
-        val context = LocalContext.current
 
         val buttonClick = { deviceName: String ->
             if (!arePermissionsGranted(requiredPermissions)) {
@@ -135,6 +136,8 @@ class MainActivity : ComponentActivity() {
                         deviceName,
                         onError = { }
                     )
+                    connecting = false
+                    connected = true
                     beginListeningForMessages { message ->
                         //Log.d("MESSAGE", message)
 
@@ -182,10 +185,28 @@ class MainActivity : ComponentActivity() {
             verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, Color.Black, CircleShape)
+                        .background(if (connected) Color.Green else (if (connecting) Color.Yellow else Color.Red))
+                ) {
+
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             TextField(
                 value = outMessage,
                 onValueChange = { outMessage = it },
-                enabled = connecting
+                enabled = connected
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -197,18 +218,22 @@ class MainActivity : ComponentActivity() {
             ) {
                 Button(
                     onClick = {
-                        buttonClick("DSD TECH HC-05")
+                        CoroutineScope(Dispatchers.IO).launch {
+                            buttonClick("DSD TECH HC-05")
+                        }
                     },
-                    enabled = !connecting
+                    enabled = !connected
                 ) {
                     Text(text = "Connect to DSD TECH HC-05")
                 }
 
                 Button(
                     onClick = {
-                        buttonClick("HC-06")
+                        CoroutineScope(Dispatchers.IO).launch {
+                            buttonClick("HC-06")
+                        }
                     },
-                    enabled = !connecting
+                    enabled = !connected
                 ) {
                     Text(text = "Connect to HC-06")
                 }
@@ -225,7 +250,7 @@ class MainActivity : ComponentActivity() {
                     onClick = {
                         sendMessage(outMessage)
                     },
-                    enabled = connecting
+                    enabled = connected
                 ) {
                     Text("Send custom message")
                 }
@@ -240,7 +265,7 @@ class MainActivity : ComponentActivity() {
                     onClick = {
                         sendMessage("|{\"lights\":\"on\"}&")
                     },
-                    enabled = connecting
+                    enabled = connected
                 ) {
                     Text("Lights ON")
                 }
@@ -249,7 +274,7 @@ class MainActivity : ComponentActivity() {
                     onClick = {
                         sendMessage("|{\"lights\":\"off\"}&")
                     },
-                    enabled = connecting
+                    enabled = connected
                 ) {
                     Text("Lights OFF")
                 }
@@ -269,7 +294,7 @@ class MainActivity : ComponentActivity() {
                     onClick = {
                         sendMessage("|{\"blinds\":\"" + (blindsLevel * 100).toInt().toString() + "\"}&")
                     },
-                    enabled = connecting
+                    enabled = connected
                 ) {
                     Text("Move blinds")
                 }
@@ -300,8 +325,25 @@ class MainActivity : ComponentActivity() {
 
                 }
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Button(
+                    onClick = {
+                        disconnect()
+                        connected = false
+                    },
+                    enabled = connected
+                ) {
+                    Text("Disconnect")
+                }
+            }
         }
     }
+
 
     @RequiresApi(Build.VERSION_CODES.S)
     private fun connectToDevice(deviceName: String, onError: (String) -> Unit): Boolean {
@@ -339,6 +381,12 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    private fun disconnect() {
+        CoroutineScope(Dispatchers.IO).launch {
+            socket.close()
+        }
+    }
+
     private fun beginListeningForMessages(onMessageReceived: (String) -> Unit) {
         val inputStream = socket.inputStream
         val buffer = ByteArray(1024)
@@ -361,10 +409,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun sendMessage(message: String) {
-        if (socket.isConnected) {
-            val outputStream = socket.outputStream
-            outputStream.write(message.toByteArray())
-            Log.d("MESSAGE-SND", message)
+        CoroutineScope(Dispatchers.IO).launch {
+            if (socket.isConnected) {
+                val outputStream = socket.outputStream
+                withContext(Dispatchers.IO) {
+                    outputStream.write(message.toByteArray())
+                }
+                Log.d("MESSAGE-SND", message)
+            }
         }
     }
 }
