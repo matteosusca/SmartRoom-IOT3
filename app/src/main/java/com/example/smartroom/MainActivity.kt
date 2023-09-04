@@ -127,6 +127,7 @@ class MainActivity : ComponentActivity() {
                 if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
                     Log.e("CONNECTION", "Bluetooth is not available or turned off")
                     txt = "Bluetooth is not available or turned off."
+                    requestPermissions()
                 } else {
                     Log.d("CONNECTION", "Connecting...")
                     connecting = true
