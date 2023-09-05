@@ -19,11 +19,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.smartroom.ui.theme.SmartRoomTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -65,10 +67,282 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            Surface(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                BluetoothConnectScreen()
+            SmartRoomTheme {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                ) {
+                    var outMessage by remember { mutableStateOf("") }
+                    var connected by remember { mutableStateOf(false) }
+                    var connecting by remember { mutableStateOf(false) }
+
+                    var snackbarVisible by remember { mutableStateOf(false) }
+                    var snackBarText by remember { mutableStateOf("") }
+
+                    var btMessage by remember { mutableStateOf("") }
+                    var blindsLevel by remember { mutableStateOf(0.0) }
+
+                    val buttonClick = { deviceName: String ->
+                        if (!arePermissionsGranted(requiredPermissions)) {
+                            Log.d("CONNECTION", "Requesting permissions")
+                            requestPermissions()
+                            Log.d("CONNECTION", "Requested")
+                        } else {
+
+                            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+                                Log.e("CONNECTION", "Bluetooth is not available or turned off")
+                                snackBarText = "Bluetooth is not available or turned off"
+                                requestPermissions()
+                            } else {
+                                Log.d("CONNECTION", "Connecting...")
+                                connecting = true
+                                connectToDevice(
+                                    deviceName,
+                                    onError = { }
+                                )
+                                connecting = false
+                                connected = true
+                                beginListeningForMessages { message ->
+                                    //Log.d("MESSAGE", message)
+
+                                    // Aggiungi il messaggio ricevuto al buffer
+                                    btMessage += message
+
+                                    // Cerca l'indice dell'inizio del primo messaggio nel buffer
+                                    var startIndex = btMessage.indexOf('|')
+
+                                    // Continua a cercare messaggi finché ce ne sono
+                                    while (startIndex != -1) {
+                                        // Cerca l'indice della fine del primo messaggio nel buffer
+                                        val endIndex = btMessage.indexOf('&', startIndex)
+
+                                        if (endIndex != -1) {
+                                            // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
+                                            val json = btMessage.substring(startIndex + 1, endIndex)
+
+                                            // Rimuovi il messaggio dal buffer
+                                            btMessage = btMessage.substring(endIndex + 1)
+                                        } else {
+                                            // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
+                                            break
+                                        }
+
+                                        // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
+                                        startIndex = btMessage.indexOf('|')
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (snackbarVisible) {
+                        Snackbar(
+                            modifier = Modifier.fillMaxSize(),
+                            action = {
+                                TextButton(onClick = { snackbarVisible = false }) {
+                                    Text("Close")
+                                }
+                            },
+                            content = {
+                                Text(snackBarText)
+                            }
+                        )
+                    }
+
+
+                    if (!connected && !connecting) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(20.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                text = "SmartRoom controller",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.SpaceBetween,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Button(
+                                    onClick = {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            buttonClick("DSD TECH HC-05")
+                                        }
+                                    },
+                                    enabled = !connected
+                                ) {
+                                    Text(text = "Connect to DSD TECH HC-05")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        CoroutineScope(Dispatchers.IO).launch {
+                                            buttonClick("HC-06")
+                                        }
+                                    },
+                                    enabled = !connected
+                                ) {
+                                    Text(text = "Connect to HC-06")
+                                }
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(20.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(text = "SmartRoom controller", style = MaterialTheme.typography.titleLarge)
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Status", style = MaterialTheme.typography.labelMedium)
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .border(2.dp, Color.Black, CircleShape)
+                                        .background(if (connected) Color.Green else (if (connecting) Color.Yellow else Color.Red))
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Lights", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = {
+                                        sendMessage("|{\"lights\":\"on\"}&")
+                                    },
+                                    enabled = connected
+                                ) {
+                                    Text("On")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        sendMessage("|{\"lights\":\"off\"}&")
+                                    },
+                                    enabled = connected
+                                ) {
+                                    Text("Off")
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Blinds", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Slider(
+                                    modifier = Modifier.fillMaxWidth(0.65f),
+                                    value = blindsLevel.toFloat(),
+                                    onValueChange = { blindsLevel = it.toDouble() }
+                                )
+
+                                Button(
+                                    onClick = {
+                                        sendMessage(
+                                            "|{\"blinds\":\"" + (blindsLevel * 100).toInt()
+                                                .toString() + "\"}&"
+                                        )
+                                    },
+                                    enabled = connected
+                                ) {
+                                    Text("Move blinds")
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Custom message", style = MaterialTheme.typography.labelMedium)
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextField(
+                                    value = outMessage,
+                                    onValueChange = { outMessage = it },
+                                    enabled = connected
+                                )
+
+                                Button(
+                                    onClick = {
+                                        sendMessage(outMessage)
+                                    },
+                                    enabled = connected
+                                ) {
+                                    Text("Send")
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceAround
+                            ) {
+                                Button(
+                                    onClick = {
+                                        disconnect()
+                                        connected = false
+                                    },
+                                    enabled = connected
+                                ) {
+                                    Text("Disconnect")
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                        }
+                    }
+                }
             }
         }
 
@@ -105,245 +379,6 @@ class MainActivity : ComponentActivity() {
             btPerm.launch(enableBtIntent)
         }
     }
-
-    @RequiresApi(Build.VERSION_CODES.S)
-    @Composable
-    fun BluetoothConnectScreen() {
-        var outMessage by remember { mutableStateOf("") }
-        var connected by remember { mutableStateOf(false) }
-        var connecting by remember { mutableStateOf(false) }
-        var txt by remember { mutableStateOf("") }
-
-        var btMessage by remember { mutableStateOf("") }
-        var brightness by remember { mutableStateOf(0.0) }
-        var blindsLevel by remember { mutableStateOf(0.0) }
-
-        val buttonClick = { deviceName: String ->
-            if (!arePermissionsGranted(requiredPermissions)) {
-                Log.d("CONNECTION", "Requesting permissions")
-                requestPermissions()
-                Log.d("CONNECTION", "Requested")
-            } else {
-
-                if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-                    Log.e("CONNECTION", "Bluetooth is not available or turned off")
-                    txt = "Bluetooth is not available or turned off."
-                    requestPermissions()
-                } else {
-                    Log.d("CONNECTION", "Connecting...")
-                    connecting = true
-                    connectToDevice(
-                        deviceName,
-                        onError = { }
-                    )
-                    connecting = false
-                    connected = true
-                    beginListeningForMessages { message ->
-                        //Log.d("MESSAGE", message)
-
-                        // Aggiungi il messaggio ricevuto al buffer
-                        btMessage += message
-
-                        // Cerca l'indice dell'inizio del primo messaggio nel buffer
-                        var startIndex = btMessage.indexOf('|')
-
-                        // Continua a cercare messaggi finché ce ne sono
-                        while (startIndex != -1) {
-                            // Cerca l'indice della fine del primo messaggio nel buffer
-                            val endIndex = btMessage.indexOf('&', startIndex)
-
-                            if (endIndex != -1) {
-                                // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
-                                val json = btMessage.substring(startIndex + 1, endIndex)
-
-                                try {
-                                    val map = JSONObject(json)
-
-                                    txt = map.toString()
-                                    brightness = map["brightness"].toString().trim().toDouble() / 1024
-                                } catch (e: JSONException) {
-                                    Log.e("MESSAGE", "Error parsing JSON: $json")
-                                }
-
-                                // Rimuovi il messaggio dal buffer
-                                btMessage = btMessage.substring(endIndex + 1)
-                            } else {
-                                // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
-                                break
-                            }
-
-                            // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
-                            startIndex = btMessage.indexOf('|')
-                        }
-                    }
-                }
-            }
-        }
-
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(10.dp),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .border(2.dp, Color.Black, CircleShape)
-                        .background(if (connected) Color.Green else (if (connecting) Color.Yellow else Color.Red))
-                ) {
-
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            TextField(
-                value = outMessage,
-                onValueChange = { outMessage = it },
-                enabled = connected
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Button(
-                    onClick = {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            buttonClick("DSD TECH HC-05")
-                        }
-                    },
-                    enabled = !connected
-                ) {
-                    Text(text = "Connect to DSD TECH HC-05")
-                }
-
-                Button(
-                    onClick = {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            buttonClick("HC-06")
-                        }
-                    },
-                    enabled = !connected
-                ) {
-                    Text(text = "Connect to HC-06")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Button(
-                    onClick = {
-                        sendMessage(outMessage)
-                    },
-                    enabled = connected
-                ) {
-                    Text("Send custom message")
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Button(
-                    onClick = {
-                        sendMessage("|{\"lights\":\"on\"}&")
-                    },
-                    enabled = connected
-                ) {
-                    Text("Lights ON")
-                }
-
-                Button(
-                    onClick = {
-                        sendMessage("|{\"lights\":\"off\"}&")
-                    },
-                    enabled = connected
-                ) {
-                    Text("Lights OFF")
-                }
-            }
-
-            Slider(
-                value = blindsLevel.toFloat(),
-                onValueChange = { blindsLevel = it.toDouble() }
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Button(
-                    onClick = {
-                        sendMessage("|{\"blinds\":\"" + (blindsLevel * 100).toInt().toString() + "\"}&")
-                    },
-                    enabled = connected
-                ) {
-                    Text("Move blinds")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(modifier = Modifier.padding(horizontal = 5.dp, vertical = 0.dp), text = txt, color = MaterialTheme.colorScheme.error)
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Log.d("BRIGHTNESS", brightness.toString())
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.4f)
-                    .padding(10.dp)
-                    .border(2.dp, Color.Black),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column(
-                    modifier = Modifier
-                        .border(2.dp, Color.Red)
-                        .fillMaxHeight(brightness.toFloat())
-                        .fillMaxWidth()
-                ) {
-
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Button(
-                    onClick = {
-                        disconnect()
-                        connected = false
-                    },
-                    enabled = connected
-                ) {
-                    Text("Disconnect")
-                }
-            }
-        }
-    }
-
 
     @RequiresApi(Build.VERSION_CODES.S)
     private fun connectToDevice(deviceName: String, onError: (String) -> Unit): Boolean {
