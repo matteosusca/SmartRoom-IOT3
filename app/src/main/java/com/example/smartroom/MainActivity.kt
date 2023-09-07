@@ -39,13 +39,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONException
-import org.json.JSONObject
 import java.io.IOException
 import java.util.*
 
 class MainActivity : ComponentActivity() {
-
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private lateinit var socket: BluetoothSocket
 
@@ -96,12 +93,11 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 Log.d("CONNECTION", "Connecting...")
                                 connecting = true
-                                connectToDevice(
+                                connected = connectToDevice(
                                     deviceName,
                                     onError = { }
                                 )
                                 connecting = false
-                                connected = true
                                 beginListeningForMessages { message ->
                                     //Log.d("MESSAGE", message)
 
@@ -167,6 +163,7 @@ class MainActivity : ComponentActivity() {
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Button(
+                                    modifier = Modifier.padding(7.dp),
                                     onClick = {
                                         CoroutineScope(Dispatchers.IO).launch {
                                             buttonClick("DSD TECH HC-05")
@@ -178,6 +175,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 Button(
+                                    modifier = Modifier.padding(7.dp),
                                     onClick = {
                                         CoroutineScope(Dispatchers.IO).launch {
                                             buttonClick("HC-06")
@@ -195,7 +193,11 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = Arrangement.SpaceEvenly,
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(text = "SmartRoom controller", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                text = "SmartRoom controller",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(7.dp)
+                            )
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -235,6 +237,7 @@ class MainActivity : ComponentActivity() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Button(
+                                    modifier = Modifier.padding(7.dp),
                                     onClick = {
                                         sendMessage("|{\"lights\":\"on\"}&")
                                     },
@@ -244,6 +247,7 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 Button(
+                                    modifier = Modifier.padding(7.dp),
                                     onClick = {
                                         sendMessage("|{\"lights\":\"off\"}&")
                                     },
@@ -275,6 +279,7 @@ class MainActivity : ComponentActivity() {
                                 )
 
                                 Button(
+                                    modifier = Modifier.padding(7.dp),
                                     onClick = {
                                         sendMessage(
                                             "|{\"blinds\":\"" + (blindsLevel * 100).toInt()
@@ -311,6 +316,7 @@ class MainActivity : ComponentActivity() {
                                 )
 
                                 Button(
+                                    modifier = Modifier.padding(7.dp),
                                     onClick = {
                                         sendMessage(outMessage)
                                     },
