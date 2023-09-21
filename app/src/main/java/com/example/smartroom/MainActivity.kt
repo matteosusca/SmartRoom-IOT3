@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -39,6 +40,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.IOException
 import java.util.*
 
@@ -79,6 +81,10 @@ class MainActivity : ComponentActivity() {
                     var btMessage by remember { mutableStateOf("") }
                     var blindsLevel by remember { mutableStateOf(0.0) }
 
+                    var receivedMessage by remember { mutableStateOf("") }
+                    var lightsState by remember { mutableStateOf(false) }
+                    var blindsState by remember { mutableStateOf(0) }
+
                     val buttonClick = { deviceName: String ->
                         if (!arePermissionsGranted(requiredPermissions)) {
                             Log.d("CONNECTION", "Requesting permissions")
@@ -98,8 +104,35 @@ class MainActivity : ComponentActivity() {
                                     onError = { }
                                 )
                                 connecting = false
+
                                 beginListeningForMessages { message ->
-                                    //Log.d("MESSAGE", message)
+                                    btMessage += message
+
+                                    if (btMessage.contains('&')) {
+                                        Log.d("RCV-MESSAGE", btMessage)
+
+                                        btMessage = btMessage.substring(
+                                            btMessage.indexOf('{'),
+                                            btMessage.indexOf('}') + 1
+                                        )
+                                        receivedMessage = btMessage
+
+                                        btMessage = btMessage.replace("|", "")
+                                        btMessage = btMessage.replace("&", "")
+                                        btMessage = btMessage.replace("\n", "")
+
+                                        val json = JSONObject(btMessage)
+                                        if (json.has("lights")) {
+                                            lightsState = json.getString("lights") == "on"
+                                        }
+                                        if (json.has("blinds")) {
+                                            blindsState = json.getString("blinds").toInt()
+                                        }
+                                        btMessage = ""
+                                    }
+                                }
+
+                                /*beginListeningForMessages { message ->
 
                                     // Aggiungi il messaggio ricevuto al buffer
                                     btMessage += message
@@ -126,7 +159,7 @@ class MainActivity : ComponentActivity() {
                                         // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
                                         startIndex = btMessage.indexOf('|')
                                     }
-                                }
+                                }*/
                             }
                         }
                     }
@@ -148,7 +181,9 @@ class MainActivity : ComponentActivity() {
 
                     if (!connected && !connecting) {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(20.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(20.dp),
                             verticalArrangement = Arrangement.SpaceEvenly,
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
@@ -189,7 +224,9 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(20.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(20.dp),
                             verticalArrangement = Arrangement.SpaceEvenly,
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
@@ -228,7 +265,12 @@ class MainActivity : ComponentActivity() {
                                 horizontalArrangement = Arrangement.Start,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(text = "Lights", style = MaterialTheme.typography.labelMedium)
+                                Text(
+                                    text = "Lights",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier
+                                        .background(if (lightsState) Color.Cyan else Color.Blue)
+                                )
                             }
 
                             Row(
@@ -310,7 +352,7 @@ class MainActivity : ComponentActivity() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 TextField(
-                                    value = outMessage,
+                                    value = receivedMessage,
                                     onValueChange = { outMessage = it },
                                     enabled = connected
                                 )
