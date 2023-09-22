@@ -13,25 +13,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -40,6 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.util.*
@@ -62,6 +68,7 @@ class MainActivity : ComponentActivity() {
 
     private var isThreadReading = false
 
+    @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,11 +86,12 @@ class MainActivity : ComponentActivity() {
                     var snackBarText by remember { mutableStateOf("") }
 
                     var btMessage by remember { mutableStateOf("") }
-                    var blindsLevel by remember { mutableStateOf(0.0) }
 
                     var receivedMessage by remember { mutableStateOf("") }
                     var lightsState by remember { mutableStateOf(false) }
-                    var blindsState by remember { mutableStateOf(0) }
+                    var blindsState by remember { mutableStateOf(100.0) }
+
+                    var pagerState = rememberPagerState()
 
                     val buttonClick = { deviceName: String ->
                         if (!arePermissionsGranted(requiredPermissions)) {
@@ -111,55 +119,31 @@ class MainActivity : ComponentActivity() {
                                     if (btMessage.contains('&')) {
                                         Log.d("RCV-MESSAGE", btMessage)
 
-                                        btMessage = btMessage.substring(
+                                        /*btMessage = btMessage.substring(
                                             btMessage.indexOf('{'),
-                                            btMessage.indexOf('}') + 1
-                                        )
+                                            btMessage.indexOf('}')
+                                        )*/
                                         receivedMessage = btMessage
 
                                         btMessage = btMessage.replace("|", "")
                                         btMessage = btMessage.replace("&", "")
                                         btMessage = btMessage.replace("\n", "")
 
-                                        val json = JSONObject(btMessage)
-                                        if (json.has("lights")) {
-                                            lightsState = json.getString("lights") == "on"
+                                        try {
+                                            val json = JSONObject(btMessage)
+                                            if (json.has("lights")) {
+                                                lightsState = json.getString("lights") == "on"
+                                            }
+                                            if (json.has("blinds")) {
+                                                blindsState = json.getString("blinds").toDouble() / 100
+                                            }
+                                            btMessage = ""
+                                        } catch (e: JSONException) {
+                                            Log.e("JSON", "Exception")
+                                            btMessage = ""
                                         }
-                                        if (json.has("blinds")) {
-                                            blindsState = json.getString("blinds").toInt()
-                                        }
-                                        btMessage = ""
                                     }
                                 }
-
-                                /*beginListeningForMessages { message ->
-
-                                    // Aggiungi il messaggio ricevuto al buffer
-                                    btMessage += message
-
-                                    // Cerca l'indice dell'inizio del primo messaggio nel buffer
-                                    var startIndex = btMessage.indexOf('|')
-
-                                    // Continua a cercare messaggi finché ce ne sono
-                                    while (startIndex != -1) {
-                                        // Cerca l'indice della fine del primo messaggio nel buffer
-                                        val endIndex = btMessage.indexOf('&', startIndex)
-
-                                        if (endIndex != -1) {
-                                            // Se la fine del messaggio è presente nel buffer, estrai il messaggio e gestiscilo
-                                            val json = btMessage.substring(startIndex + 1, endIndex)
-
-                                            // Rimuovi il messaggio dal buffer
-                                            btMessage = btMessage.substring(endIndex + 1)
-                                        } else {
-                                            // Se la fine del messaggio non è presente nel buffer, lascia il messaggio nel buffer e interrompi la ricerca
-                                            break
-                                        }
-
-                                        // Cerca l'indice dell'inizio del prossimo messaggio nel buffer
-                                        startIndex = btMessage.indexOf('|')
-                                    }
-                                }*/
                             }
                         }
                     }
@@ -223,7 +207,69 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     } else {
-                        Column(
+                        HorizontalPager(
+                            pageCount = 2,
+                            state = pagerState,
+                            key = { "Test$it" }
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Top
+                            ) {
+                                TopAppBar(title = { Text(text = if (it == 0) "Lights" else (if (it == 1) "Blinds" else "Graph")) })
+                                if (it == 0) {
+                                    ElevatedButton(
+                                        modifier = Modifier
+                                            .fillMaxSize(0.6f)
+                                            .aspectRatio(1f)
+                                            .clip(CircleShape),
+                                        colors = ButtonDefaults.elevatedButtonColors(
+                                            containerColor = if (lightsState) Color.Blue else Color.DarkGray
+                                        ),
+                                        elevation = ButtonDefaults.elevatedButtonElevation(15.dp),
+                                        onClick = {
+                                            lightsState = if (lightsState) {
+                                                sendMessage("|{\"lights\":\"off\"}&")
+                                                false
+                                            } else {
+                                                sendMessage("|{\"lights\":\"on\"}&")
+                                                true
+                                            }
+                                        }
+                                    ) {
+                                        Image(
+                                            modifier = Modifier.fillMaxSize(0.7f),
+                                            painter = painterResource(id = R.drawable.baseline_power_settings_new_24),
+                                            contentDescription = "Toggle lights"
+                                        )
+                                    }
+                                } else if (it == 1) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Top
+                                    ) {
+                                        Slider(
+                                            modifier = Modifier.fillMaxWidth(0.65f),
+                                            value = blindsState.toFloat(),
+                                            onValueChange = {
+                                                blindsState = it.toDouble()
+                                            },
+                                            onValueChangeFinished = {
+                                                sendMessage(
+                                                    "|{\"blinds\":\"" + (blindsState * 100).toInt()
+                                                        .toString() + "\"}&"
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        /*Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(20.dp),
@@ -388,7 +434,7 @@ class MainActivity : ComponentActivity() {
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                        }
+                        }*/
                     }
                 }
             }
