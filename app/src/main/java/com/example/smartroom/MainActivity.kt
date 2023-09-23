@@ -9,12 +9,15 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -22,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -30,13 +34,16 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -64,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
     private val btPerm = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         Log.d("BT-TEST", it.toString())
+        Toast.makeText(this, if (it.resultCode == RESULT_OK) "Bluetooth enabled" else "Bluetooth not enabled", Toast.LENGTH_SHORT).show()
     }
 
     private var isThreadReading = false
@@ -78,12 +86,8 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier
                         .fillMaxSize()
                 ) {
-                    var outMessage by remember { mutableStateOf("") }
                     var connected by remember { mutableStateOf(false) }
                     var connecting by remember { mutableStateOf(false) }
-
-                    var snackbarVisible by remember { mutableStateOf(false) }
-                    var snackBarText by remember { mutableStateOf("") }
 
                     var btMessage by remember { mutableStateOf("") }
 
@@ -91,7 +95,7 @@ class MainActivity : ComponentActivity() {
                     var lightsState by remember { mutableStateOf(false) }
                     var blindsState by remember { mutableStateOf(100.0) }
 
-                    var pagerState = rememberPagerState()
+                    val pagerState = rememberPagerState()
 
                     val buttonClick = { deviceName: String ->
                         if (!arePermissionsGranted(requiredPermissions)) {
@@ -102,14 +106,16 @@ class MainActivity : ComponentActivity() {
 
                             if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
                                 Log.e("CONNECTION", "Bluetooth is not available or turned off")
-                                snackBarText = "Bluetooth is not available or turned off"
                                 requestPermissions()
                             } else {
                                 Log.d("CONNECTION", "Connecting...")
                                 connecting = true
                                 connected = connectToDevice(
                                     deviceName,
-                                    onError = { }
+                                    onError = { message ->
+                                        Log.e("CONNECTION", message)
+                                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                                    }
                                 )
                                 connecting = false
 
@@ -118,13 +124,7 @@ class MainActivity : ComponentActivity() {
 
                                     if (btMessage.contains('&')) {
                                         Log.d("RCV-MESSAGE", btMessage)
-
-                                        /*btMessage = btMessage.substring(
-                                            btMessage.indexOf('{'),
-                                            btMessage.indexOf('}')
-                                        )*/
                                         receivedMessage = btMessage
-
                                         btMessage = btMessage.replace("|", "")
                                         btMessage = btMessage.replace("&", "")
                                         btMessage = btMessage.replace("\n", "")
@@ -139,7 +139,7 @@ class MainActivity : ComponentActivity() {
                                             }
                                             btMessage = ""
                                         } catch (e: JSONException) {
-                                            Log.e("JSON", "Exception")
+                                            Log.e("JSON", "Exception while parsing JSON")
                                             btMessage = ""
                                         }
                                     }
@@ -148,293 +148,252 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    if (snackbarVisible) {
-                        Snackbar(
-                            modifier = Modifier.fillMaxSize(),
-                            action = {
-                                TextButton(onClick = { snackbarVisible = false }) {
-                                    Text("Close")
-                                }
-                            },
-                            content = {
-                                Text(snackBarText)
-                            }
-                        )
-                    }
-
-
-                    if (!connected && !connecting) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(20.dp),
-                            verticalArrangement = Arrangement.SpaceEvenly,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = "SmartRoom controller",
-                                style = MaterialTheme.typography.titleLarge
-                            )
-
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(10.dp)
+                    ) {
+                        if (!connected && !connecting) {
                             Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.SpaceBetween,
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(20.dp),
+                                verticalArrangement = Arrangement.SpaceEvenly,
+                                horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Button(
-                                    modifier = Modifier.padding(7.dp),
-                                    onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            buttonClick("DSD TECH HC-05")
-                                        }
-                                    },
-                                    enabled = !connected
-                                ) {
-                                    Text(text = "Connect to DSD TECH HC-05")
-                                }
+                                Text(
+                                    text = "SmartRoom controller",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
 
-                                Button(
-                                    modifier = Modifier.padding(7.dp),
-                                    onClick = {
-                                        CoroutineScope(Dispatchers.IO).launch {
-                                            buttonClick("HC-06")
-                                        }
-                                    },
-                                    enabled = !connected
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.SpaceBetween,
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(text = "Connect to HC-06")
+                                    Button(
+                                        modifier = Modifier.padding(7.dp),
+                                        onClick = {
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                buttonClick("DSD TECH HC-05")
+                                            }
+                                        },
+                                        enabled = !connected
+                                    ) {
+                                        Text(text = "Connect to DSD TECH HC-05")
+                                    }
+
+                                    Button(
+                                        modifier = Modifier.padding(7.dp),
+                                        onClick = {
+                                            CoroutineScope(Dispatchers.IO).launch {
+                                                buttonClick("HC-06")
+                                            }
+                                        },
+                                        enabled = !connected
+                                    ) {
+                                        Text(text = "Connect to HC-06")
+                                    }
                                 }
                             }
-                        }
-                    } else {
-                        HorizontalPager(
-                            pageCount = 2,
-                            state = pagerState,
-                            key = { "Test$it" }
-                        ) {
+                        } else {
                             Column(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Top
                             ) {
-                                TopAppBar(title = { Text(text = if (it == 0) "Lights" else (if (it == 1) "Blinds" else "Graph")) })
-                                if (it == 0) {
-                                    ElevatedButton(
-                                        modifier = Modifier
-                                            .fillMaxSize(0.6f)
-                                            .aspectRatio(1f)
-                                            .clip(CircleShape),
-                                        colors = ButtonDefaults.elevatedButtonColors(
-                                            containerColor = if (lightsState) Color.Blue else Color.DarkGray
-                                        ),
-                                        elevation = ButtonDefaults.elevatedButtonElevation(15.dp),
-                                        onClick = {
-                                            lightsState = if (lightsState) {
-                                                sendMessage("|{\"lights\":\"off\"}&")
-                                                false
-                                            } else {
-                                                sendMessage("|{\"lights\":\"on\"}&")
-                                                true
-                                            }
-                                        }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Image(
-                                            modifier = Modifier.fillMaxSize(0.7f),
-                                            painter = painterResource(id = R.drawable.baseline_power_settings_new_24),
-                                            contentDescription = "Toggle lights"
+                                        Text(
+                                            text = "Status",
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp)
+                                                .clip(CircleShape)
+                                                .border(2.dp, Color.Black, CircleShape)
+                                                .background(if (connected) Color.Green else (if (connecting) Color.Yellow else Color.Red))
                                         )
                                     }
-                                } else if (it == 1) {
+                                    Button(
+                                        onClick = {
+                                            disconnect()
+                                            connected = false
+                                        },
+                                        enabled = connected
+                                    ) {
+                                        Text("Disconnect")
+                                    }
+                                }
+
+                                Divider(modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(15.dp))
+
+                                HorizontalPager(
+                                    pageCount = 2,
+                                    state = pagerState,
+                                    key = { "Test$it" }
+                                ) {
                                     Column(
-                                        modifier = Modifier
-                                            .fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize(),
                                         horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.Top
                                     ) {
-                                        Slider(
-                                            modifier = Modifier.fillMaxWidth(0.65f),
-                                            value = blindsState.toFloat(),
-                                            onValueChange = {
-                                                blindsState = it.toDouble()
-                                            },
-                                            onValueChangeFinished = {
-                                                sendMessage(
-                                                    "|{\"blinds\":\"" + (blindsState * 100).toInt()
-                                                        .toString() + "\"}&"
-                                                )
+
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(10.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Top
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxSize(),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally
+                                                ) {
+                                                    TopAppBar(
+                                                        title = {
+                                                            Text(
+                                                                text = if (it == 0) "Lights" else "Blinds",
+                                                                style = MaterialTheme.typography.titleLarge
+                                                            )
+                                                        }
+                                                    )
+                                                    if (it == 0) {
+                                                        ElevatedButton(
+                                                            modifier = Modifier
+                                                                .fillMaxSize(0.6f)
+                                                                .aspectRatio(1f)
+                                                                .clip(CircleShape),
+                                                            colors = ButtonDefaults.elevatedButtonColors(
+                                                                containerColor = if (lightsState)
+                                                                    Color.hsl(125f, 0.85f, 0.45f)
+                                                                else
+                                                                    Color.hsl(125f, 0.85f, 0.2f)
+                                                            ),
+                                                            elevation = ButtonDefaults.elevatedButtonElevation(
+                                                                15.dp
+                                                            ),
+                                                            onClick = {
+                                                                lightsState = if (lightsState) {
+                                                                    sendMessage("|{\"lights\":\"off\"}&")
+                                                                    false
+                                                                } else {
+                                                                    sendMessage("|{\"lights\":\"on\"}&")
+                                                                    true
+                                                                }
+                                                            }
+                                                        ) {
+                                                            Image(
+                                                                modifier = Modifier.fillMaxSize(0.7f),
+                                                                painter = painterResource(id = R.drawable.baseline_power_settings_new_24),
+                                                                contentDescription = "Toggle lights"
+                                                            )
+                                                        }
+                                                    } else if (it == 1) {
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = "Open",
+                                                                style = MaterialTheme.typography.labelLarge
+                                                            )
+                                                            Text(
+                                                                text = "Closed",
+                                                                style = MaterialTheme.typography.labelLarge
+                                                            )
+                                                        }
+                                                        Slider(
+                                                            modifier = Modifier.fillMaxWidth(0.92f),
+                                                            value = blindsState.toFloat(),
+                                                            onValueChange = {
+                                                                blindsState = it.toDouble()
+                                                            },
+                                                            onValueChangeFinished = {
+                                                                sendMessage(
+                                                                    "|{\"blinds\":\"" + (blindsState * 100).toInt()
+                                                                        .toString() + "\"}&"
+                                                                )
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                                if (it == 0) {
+                                                    Column(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Bottom
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.padding(25.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = "Swipe right to control blinds",
+                                                                style = MaterialTheme.typography.bodyLarge
+                                                            )
+                                                            Image(
+                                                                painter = painterResource(id = R.drawable.baseline_keyboard_arrow_right_24),
+                                                                contentDescription = "Right arrow"
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = "If you manually turn on/off the lights, they will remain in that state for a certain amount of seconds, regardless of movements within the room.",
+                                                            style = MaterialTheme.typography.labelSmall
+                                                        )
+                                                    }
+                                                } else if (it == 1) {
+                                                    Column(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Bottom
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier.padding(25.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Image(
+                                                                painter = painterResource(id = R.drawable.baseline_keyboard_arrow_left_24),
+                                                                contentDescription = "Left arrow"
+                                                            )
+                                                            Text(
+                                                                text = "Swipe left to control lights",
+                                                                style = MaterialTheme.typography.bodyLarge
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = "Blinds automatically open when someone enters the room for the first time of the day, then they will be totally manual.",
+                                                            style = MaterialTheme.typography.labelSmall
+                                                        )
+                                                    }
+                                                }
                                             }
-                                        )
+                                        }
                                     }
                                 }
                             }
                         }
-                        
-                        /*Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(20.dp),
-                            verticalArrangement = Arrangement.SpaceEvenly,
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = "SmartRoom controller",
-                                style = MaterialTheme.typography.titleLarge,
-                                modifier = Modifier.padding(7.dp)
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "Status", style = MaterialTheme.typography.labelMedium)
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(30.dp)
-                                        .clip(CircleShape)
-                                        .border(2.dp, Color.Black, CircleShape)
-                                        .background(if (connected) Color.Green else (if (connecting) Color.Yellow else Color.Red))
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.Start,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Lights",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier
-                                        .background(if (lightsState) Color.Cyan else Color.Blue)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Button(
-                                    modifier = Modifier.padding(7.dp),
-                                    onClick = {
-                                        sendMessage("|{\"lights\":\"on\"}&")
-                                    },
-                                    enabled = connected
-                                ) {
-                                    Text("On")
-                                }
-
-                                Button(
-                                    modifier = Modifier.padding(7.dp),
-                                    onClick = {
-                                        sendMessage("|{\"lights\":\"off\"}&")
-                                    },
-                                    enabled = connected
-                                ) {
-                                    Text("Off")
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.Start,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "Blinds", style = MaterialTheme.typography.labelMedium)
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Slider(
-                                    modifier = Modifier.fillMaxWidth(0.65f),
-                                    value = blindsLevel.toFloat(),
-                                    onValueChange = { blindsLevel = it.toDouble() }
-                                )
-
-                                Button(
-                                    modifier = Modifier.padding(7.dp),
-                                    onClick = {
-                                        sendMessage(
-                                            "|{\"blinds\":\"" + (blindsLevel * 100).toInt()
-                                                .toString() + "\"}&"
-                                        )
-                                    },
-                                    enabled = connected
-                                ) {
-                                    Text("Move blinds")
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.Start,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(text = "Custom message", style = MaterialTheme.typography.labelMedium)
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextField(
-                                    value = receivedMessage,
-                                    onValueChange = { outMessage = it },
-                                    enabled = connected
-                                )
-
-                                Button(
-                                    modifier = Modifier.padding(7.dp),
-                                    onClick = {
-                                        sendMessage(outMessage)
-                                    },
-                                    enabled = connected
-                                ) {
-                                    Text("Send")
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceAround
-                            ) {
-                                Button(
-                                    onClick = {
-                                        disconnect()
-                                        connected = false
-                                    },
-                                    enabled = connected
-                                ) {
-                                    Text("Disconnect")
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                        }*/
                     }
                 }
             }
@@ -467,9 +426,7 @@ class MainActivity : ComponentActivity() {
                     arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
                     requestBtPermCode
                 )
-                // Callback per grabbare il risultato?
             }
-            // Se è stato dato il permesso soprastante, allora chiedi di attivare il bluetooth
             btPerm.launch(enableBtIntent)
         }
     }
@@ -499,12 +456,9 @@ class MainActivity : ComponentActivity() {
         try {
             socket = targetDevice.createRfcommSocketToServiceRecord(uuid)
             socket.connect()
-
-            // Connection successful, handle further communication
             Log.d("CONNECTION", "Connected to $deviceName")
-
         } catch (e: IOException) {
-            onError("Error establishing Bluetooth connection.")
+            onError("Cannot connect to device $deviceName")
             return false
         }
         return true
@@ -526,7 +480,6 @@ class MainActivity : ComponentActivity() {
                 try {
                     val bytes = inputStream.read(buffer)
                     val readMessage = String(buffer, 0, bytes)
-                    //Log.d("MESSAGE-RCV", readMessage)
                     onMessageReceived(readMessage)
                 } catch (e: IOException) {
                     break
